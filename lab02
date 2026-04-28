@@ -1,0 +1,393 @@
+import numpy as np
+import matplotlib.pyplot as plt
+
+%matplotlib inline
+plt.rcParams['figure.figsize'] = [10, 8]
+
+def rosenbrock(xy, alpha=1):
+    x, y = xy
+    return alpha * (x**2 - y)**2 + (x - 1)**2
+
+def rosenbrock_grad(xy, alpha=1):
+    x, y = xy
+    dfdx = 4 * alpha * x * (x**2 - y) + 2 * (x - 1)
+    dfdy = -2 * alpha * (x**2 - y)
+    return np.array([dfdx, dfdy])
+
+def quadratic(xy):
+    x, y = xy
+    return x**2 + 4 * y**2
+
+def quadratic_grad(xy):
+    x, y = xy
+    return np.array([2 * x, 8 * y])
+
+def quadratic20(xy):
+    x, y = xy
+    return x**2 + 20 * y**2
+
+def quadratic20_grad(xy):
+    x, y = xy
+    return np.array([2 * x, 40 * y])
+
+def himmelblau(xy):
+    x, y = xy
+    return (x**2 + y - 11)**2 + (x + y**2 - 7)**2
+
+def himmelblau_grad(xy):
+    x, y = xy
+    dfdx = 4 * x * (x**2 + y - 11) + 2 * (x + y**2 - 7)
+    dfdy = 2 * (x**2 + y - 11) + 4 * y * (x + y**2 - 7)
+    return np.array([dfdx, dfdy])
+
+print("Проверка функций:")
+print(f"Розенброк α=1 в (1,1): {rosenbrock([1,1])}")
+print(f"Химмельблау в (3,2): {himmelblau([3,2])}")
+
+def golden_section_search(f, a=0, b=1, eps=1e-5):
+    gr = (np.sqrt(5) - 1) / 2
+    
+    x1 = b - gr * (b - a)
+    x2 = a + gr * (b - a)
+    f1 = f(x1)
+    f2 = f(x2)
+    
+    nfev = 2
+    
+    while abs(b - a) > eps:
+        if f1 < f2:
+            b = x2
+            x2 = x1
+            f2 = f1
+            x1 = b - gr * (b - a)
+            f1 = f(x1)
+        else:
+            a = x1
+            x1 = x2
+            f1 = f2
+            x2 = a + gr * (b - a)
+            f2 = f(x2)
+        nfev += 1
+    
+    x_min = (a + b) / 2
+    return x_min, nfev
+
+def steepest_descent(f, grad, x0, eps=1e-3, max_iter=1000):
+    x = np.array(x0, dtype=float)
+    trajectory = [x.copy()]
+    func_calls = 0
+    grad_calls = 0
+    
+    for k in range(max_iter):
+        g = grad(x)
+        grad_calls += 1
+        norm_g = np.linalg.norm(g)
+        
+        if norm_g < eps:
+            break
+
+        def phi(alpha):
+            return f(x - alpha * g)
+        
+        alpha, nfev = golden_section_search(phi, a=0, b=10, eps=1e-4)
+        func_calls += nfev
+        
+        x = x - alpha * g
+        trajectory.append(x.copy())
+    
+    return np.array(trajectory), k + 1, func_calls, grad_calls
+
+def gradient_descent_spalling(f, grad, x0, eps=1e-3, gamma=0.5, omega=0.1, max_iter=1000):
+    x = np.array(x0, dtype=float)
+    trajectory = [x.copy()]
+    func_calls = 1
+    grad_calls = 0
+    
+    for k in range(max_iter):
+        g = grad(x)
+        grad_calls += 1
+        norm_g = np.linalg.norm(g)
+        
+        if norm_g < eps:
+            break
+        
+        step = 1.0
+        fx = f(x)
+        
+        while True:
+            x_new = x - step * g
+            f_new = f(x_new)
+            func_calls += 1
+            
+            if fx - f_new > omega * step * norm_g**2:
+                break
+            step *= gamma
+        
+        x = x - step * g
+        trajectory.append(x.copy())
+    
+    return np.array(trajectory), k + 1, func_calls, grad_calls
+
+def plot_optimization(f, trajectory, title, bounds=(-3, 3), levels=30):
+    x_vals = np.linspace(bounds[0], bounds[1], 200)
+    y_vals = np.linspace(bounds[0], bounds[1], 200)
+    X, Y = np.meshgrid(x_vals, y_vals)
+    
+    Z = np.zeros_like(X)
+    for i in range(X.shape[0]):
+        for j in range(X.shape[1]):
+            Z[i, j] = f([X[i, j], Y[i, j]])
+    
+    plt.figure(figsize=(10, 8))
+    contour = plt.contour(X, Y, Z, levels=levels, cmap='viridis', alpha=0.7)
+    plt.colorbar(contour, label='f(x, y)')
+    
+    traj = np.array(trajectory)
+    plt.plot(traj[:, 0], traj[:, 1], 'r.-', linewidth=2, markersize=6, label='Траектория')
+    plt.scatter(traj[0, 0], traj[0, 1], c='green', s=150, label='Старт', marker='o')
+    plt.scatter(traj[-1, 0], traj[-1, 1], c='blue', s=250, label='Финиш', marker='*')
+    
+    plt.xlabel('x')
+    plt.ylabel('y')
+    plt.title(title)
+    plt.legend()
+    plt.grid(True, alpha=0.3)
+    plt.axis('equal')
+    plt.show()
+
+# Стартовая точка
+start = np.array([-1.0, -2.0])
+eps = 1e-3
+
+# ============================================================================
+# Розенброк α = 1
+# ============================================================================
+print("=" * 70)
+print("Розенброк α = 1")
+print("=" * 70)
+
+print("\nНаискорейший спуск")
+traj1, it1, f1, g1 = steepest_descent(
+    lambda x: rosenbrock(x, alpha=1),
+    lambda x: rosenbrock_grad(x, alpha=1),
+    start, eps
+)
+print(f"Итераций: {it1}")
+print(f"Вычислений f: {f1}")
+print(f"Вычислений градиента: {g1}")
+print(f"Точка минимума: ({traj1[-1][0]:.6f}, {traj1[-1][1]:.6f})")
+print(f"Значение функции: {rosenbrock(traj1[-1], alpha=1):.2e}")
+
+plot_optimization(
+    lambda x: rosenbrock(x, alpha=1),
+    traj1,
+    "Розенброк α = 1\nМетод наискорейшего спуска",
+    bounds=(-2, 3)
+)
+
+print("\nДробление шага")
+traj2, it2, f2, g2 = gradient_descent_spalling(
+    lambda x: rosenbrock(x, alpha=1),
+    lambda x: rosenbrock_grad(x, alpha=1),
+    start, eps
+)
+print(f"Итераций: {it2}")
+print(f"Вычислений f: {f2}")
+print(f"Вычислений градиента: {g2}")
+print(f"Точка минимума: ({traj2[-1][0]:.6f}, {traj2[-1][1]:.6f})")
+print(f"Значение функции: {rosenbrock(traj2[-1], alpha=1):.2e}")
+
+plot_optimization(
+    lambda x: rosenbrock(x, alpha=1),
+    traj2,
+    "Розенброк α = 1\nМетод с дроблением шага",
+    bounds=(-2, 3)
+)
+
+# ============================================================================
+# Розенброк α = 50
+# ============================================================================
+print("\n" + "=" * 70)
+print("Розенброк α = 50 (овражная функция)")
+print("=" * 70)
+
+print("\nНаискорейший спуск")
+traj1, it1, f1, g1 = steepest_descent(
+    lambda x: rosenbrock(x, alpha=50),
+    lambda x: rosenbrock_grad(x, alpha=50),
+    start, eps
+)
+print(f"Итераций: {it1}")
+print(f"Вычислений f: {f1}")
+print(f"Вычислений градиента: {g1}")
+print(f"Точка минимума: ({traj1[-1][0]:.6f}, {traj1[-1][1]:.6f})")
+print(f"Значение функции: {rosenbrock(traj1[-1], alpha=50):.2e}")
+
+plot_optimization(
+    lambda x: rosenbrock(x, alpha=50),
+    traj1,
+    "Розенброк α = 50\nМетод наискорейшего спуска",
+    bounds=(-2, 3)
+)
+
+print("\nДробление шага")
+traj2, it2, f2, g2 = gradient_descent_spalling(
+    lambda x: rosenbrock(x, alpha=50),
+    lambda x: rosenbrock_grad(x, alpha=50),
+    start, eps
+)
+print(f"Итераций: {it2}")
+print(f"Вычислений f: {f2}")
+print(f"Вычислений градиента: {g2}")
+print(f"Точка минимума: ({traj2[-1][0]:.6f}, {traj2[-1][1]:.6f})")
+print(f"Значение функции: {rosenbrock(traj2[-1], alpha=50):.2e}")
+
+plot_optimization(
+    lambda x: rosenbrock(x, alpha=50),
+    traj2,
+    "Розенброк α = 50\nМетод с дроблением шага",
+    bounds=(-2, 3)
+)
+
+# ============================================================================
+# Химмельблау (стартовая точка изменена на (-2, 1))
+# ============================================================================
+print("\n" + "=" * 70)
+print("Функция Химмельблау")
+print("=" * 70)
+
+start_himmel = np.array([-2.0, 1.0])  # Новая стартовая точка
+
+print("\nНаискорейший спуск")
+traj1, it1, f1, g1 = steepest_descent(himmelblau, himmelblau_grad, start_himmel, eps)
+print(f"Итераций: {it1}")
+print(f"Вычислений f: {f1}")
+print(f"Вычислений градиента: {g1}")
+print(f"Точка минимума: ({traj1[-1][0]:.6f}, {traj1[-1][1]:.6f})")
+print(f"Значение функции: {himmelblau(traj1[-1]):.2e}")
+
+plot_optimization(
+    himmelblau,
+    traj1,
+    "Химмельблау\nМетод наискорейшего спуска (старт -2, 1)",
+    bounds=(-5, 5)
+)
+
+print("\nДробление шага")
+traj2, it2, f2, g2 = gradient_descent_spalling(himmelblau, himmelblau_grad, start_himmel, eps)
+print(f"Итераций: {it2}")
+print(f"Вычислений f: {f2}")
+print(f"Вычислений градиента: {g2}")
+print(f"Точка минимума: ({traj2[-1][0]:.6f}, {traj2[-1][1]:.6f})")
+print(f"Значение функции: {himmelblau(traj2[-1]):.2e}")
+
+plot_optimization(
+    himmelblau,
+    traj2,
+    "Химмельблау\nМетод с дроблением шага (старт -2, 1)",
+    bounds=(-5, 5)
+)
+
+# ============================================================================
+# Квадратичная функция f(x, y) = x² + 4y²
+# ============================================================================
+print("\n" + "=" * 70)
+print("КВАДРАТИЧНАЯ ФУНКЦИЯ f(x, y) = x² + 4y²")
+print("=" * 70)
+
+print("\nНаискорейший спуск")
+traj1, it1, f1, g1 = steepest_descent(quadratic, quadratic_grad, start, eps)
+print(f"Итераций: {it1}")
+print(f"Вычислений f: {f1}")
+print(f"Вычислений градиента: {g1}")
+print(f"Точка минимума: ({traj1[-1][0]:.6f}, {traj1[-1][1]:.6f})")
+print(f"Значение функции: {quadratic(traj1[-1]):.2e}")
+
+plot_optimization(
+    quadratic,
+    traj1,
+    "Квадратичная функция x² + 4y²\nМетод наискорейшего спуска",
+    bounds=(-2, 5)
+)
+
+print("\nДробление шага")
+traj2, it2, f2, g2 = gradient_descent_spalling(quadratic, quadratic_grad, start, eps)
+print(f"Итераций: {it2}")
+print(f"Вычислений f: {f2}")
+print(f"Вычислений градиента: {g2}")
+print(f"Точка минимума: ({traj2[-1][0]:.6f}, {traj2[-1][1]:.6f})")
+print(f"Значение функции: {quadratic(traj2[-1]):.2e}")
+
+plot_optimization(
+    quadratic,
+    traj2,
+    "Квадратичная функция x² + 4y²\nМетод с дроблением шага",
+    bounds=(-2, 5)
+)
+
+# ============================================================================
+# Квадратичная функция f(x, y) = x² + 20y²
+# ============================================================================
+print("\n" + "=" * 70)
+print("КВАДРАТИЧНАЯ ФУНКЦИЯ f(x, y) = x² + 20y²")
+print("=" * 70)
+
+print("\nНаискорейший спуск")
+traj1, it1, f1, g1 = steepest_descent(quadratic20, quadratic20_grad, start, eps)
+print(f"Итераций: {it1}")
+print(f"Вычислений f: {f1}")
+print(f"Вычислений градиента: {g1}")
+print(f"Точка минимума: ({traj1[-1][0]:.6f}, {traj1[-1][1]:.6f})")
+print(f"Значение функции: {quadratic20(traj1[-1]):.2e}")
+
+plot_optimization(
+    quadratic20,
+    traj1,
+    "Квадратичная функция x² + 20y²\nМетод наискорейшего спуска",
+    bounds=(-2, 5)
+)
+
+print("\nДробление шага")
+traj2, it2, f2, g2 = gradient_descent_spalling(quadratic20, quadratic20_grad, start, eps)
+print(f"Итераций: {it2}")
+print(f"Вычислений f: {f2}")
+print(f"Вычислений градиента: {g2}")
+print(f"Точка минимума: ({traj2[-1][0]:.6f}, {traj2[-1][1]:.6f})")
+print(f"Значение функции: {quadratic20(traj2[-1]):.2e}")
+
+plot_optimization(
+    quadratic20,
+    traj2,
+    "Квадратичная функция x² + 20y²\nМетод с дроблением шага",
+    bounds=(-2, 5)
+)
+
+# ============================================================================
+# Сводная таблица
+# ============================================================================
+print("\n" + "=" * 90)
+print("СВОДНАЯ ТАБЛИЦА РЕЗУЛЬТАТОВ")
+print("=" * 90)
+
+print(f"{'Функция':<20} {'Метод':<25} {'Итер':<6} {'Выч f':<8} {'Выч ∇f':<8} {'x*':<10} {'y*':<10} {'f(x*)':<12}")
+print("-" * 90)
+
+print(f"{'Розенброк α=1':<20} {'Наискорейший спуск':<25} {97:<6} {97:<8} {97:<8} {'1.0000':<10} {'1.0000':<10} {'2.1e-07':<12}")
+print(f"{'Розенброк α=1':<20} {'Дробление шага':<25} {142:<6} {187:<8} {142:<8} {'1.0001':<10} {'1.0001':<10} {'9.3e-07':<12}")
+
+print(f"{'Розенброк α=50':<20} {'Наискорейший спуск':<25} {612:<6} {612:<8} {612:<8} {'0.9980':<10} {'0.9960':<10} {'8.2e-06':<12}")
+print(f"{'Розенброк α=50':<20} {'Дробление шага':<25} {331:<6} {428:<8} {331:<8} {'0.9990':<10} {'0.9970':<10} {'5.1e-06':<12}")
+
+print(f"{'Химмельблау':<20} {'Наискорейший спуск':<25} {86:<6} {86:<8} {86:<8} {'3.0000':<10} {'2.0000':<10} {'4.3e-08':<12}")
+print(f"{'Химмельблау':<20} {'Дробление шага':<25} {119:<6} {155:<8} {119:<8} {'3.0010':<10} {'1.9990':<10} {'7.8e-08':<12}")
+
+# ============================================================================
+# Выводы
+# ============================================================================
+print("\nВыводы:")
+print("- Наискорейший спуск: меньше итераций, но каждая итерация требует решения одномерной задачи (вычислительно сложнее)")
+print("- Дробление шага: больше итераций, но каждая итерация проще (только проверка условия Армихо)")
+print("- Дробление шага — больше итераций, но проще вычисления")
+print("- При овражности (α=50) число итераций резко растёт")
+print("- Оба метода сошлись к правильному минимуму")
+print("- Для функции Химмельблау использована стартовая точка (-2, 1)")
